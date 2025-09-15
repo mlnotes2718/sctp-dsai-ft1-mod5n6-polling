@@ -1,11 +1,41 @@
 from flask import Flask, render_template, request
 import joblib
 from groq import Groq
-
 import os
+import dotenv
+from telegram.ext import Updater, MessageHandler, Filters
+
+dotenv.load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+telegram_app = None
+polling_thread = None
+# Initialize Groq client once
+groq_client = Groq()
+updater = None  # Global updater variable
+
+###############################################################
+### Function for Telegram bot polling
+###############################################################
+def handle_message(update, context):
+    query = update.message.text
+    #print(f"You said: {query}")
+    completion = groq_client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {
+                "role": "user",
+                "content": query
+            } # type: ignore
+        ]
+    )
+    #print(f"Bot reply: {completion.choices[0].message.content}")
+    update.message.reply_text(completion.choices[0].message.content)
+###############################################################
+
+
+# Initialize Flask app
 app = Flask(__name__)
 
 @app.route("/",methods=["GET","POST"])
@@ -33,7 +63,7 @@ def llama_reply():
             {
                 "role": "user",
                 "content": q
-            }
+            } # type: ignore
         ]
     )
     return(render_template("llama_reply.html",r=completion.choices[0].message.content))
@@ -53,7 +83,7 @@ def deepseek_reply():
             {
                 "role": "user",
                 "content": q
-            }
+            } # type: ignore
         ]
     )
     return(render_template("deepseek_reply.html",r=completion_ds.choices[0].message.content))
@@ -64,7 +94,7 @@ def dbs():
 
 @app.route("/prediction",methods=["GET","POST"])
 def prediction():
-    q = float(request.form.get("q"))
+    q = float(request.form.get("q")) # type: ignore
     # load model
     model = joblib.load("dbs.jl")
     # make prediction
@@ -73,65 +103,38 @@ def prediction():
 
 import requests
 
-@app.route("/telegram",methods=["GET","POST"])
-def telegram():
-    domain_url = 'https://dsat-ft1.onrender.com'
-    # The following line is used to delete the existing webhook URL for the Telegram bot
-    delete_webhook_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook"
-    requests.post(delete_webhook_url, json={"url": domain_url, "drop_pending_updates": True})
-    # Set the webhook URL for the Telegram bot
-    set_webhook_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={domain_url}/webhook"
-    webhook_response = requests.post(set_webhook_url, json={"url": domain_url, "drop_pending_updates": True})
-    if webhook_response.status_code == 200:
-        # set status message
-        status = "The telegram bot is running."
+
+###############################################################
+### Telegram Flask routes
+###############################################################
+@app.route("/telegram_polling", methods=["GET", "POST"])
+def telegram_polling():
+    return render_template("telegram_polling.html", r="Telegram polling not started.")
+
+@app.route("/start_polling", methods=["GET", "POST"])
+def start_polling():
+    global updater
+    if updater is None:
+        updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True) # type: ignore
+        dp = updater.dispatcher
+        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message)) # type: ignore
+        updater.start_polling(drop_pending_updates=True)
+        status = "Telegram polling started."
     else:
-        status = "Failed to start the telegram bot."
-    return(render_template("telegram.html", r=status))
+        status = "Polling already running."
+    return render_template("telegram_polling.html", r=status)
 
-@app.route("/stop_telegram",methods=["GET","POST"])
-def stop_telegram():
-    domain_url = 'https://dsat-ft1.onrender.com'
-    # The following line is used to delete the existing webhook URL for the Telegram bot
-    delete_webhook_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook"
-    webhook_response = requests.post(delete_webhook_url, json={"url": domain_url, "drop_pending_updates": True})
-    # Set the webhook URL for the Telegram bot
-    if webhook_response.status_code == 200:
-        # set status message
-        status = "The telegram bot has stop."
+@app.route("/stop_polling", methods=["GET", "POST"])
+def stop_polling():
+    global updater
+    if updater:
+        updater.stop()
+        updater = None
+        status = "Telegram polling stopped."
     else:
-        status = "Failed to stop the telegram bot."
-    return(render_template("stop_telegram.html", r=status))
-
-@app.route("/webhook",methods=["GET","POST"])
-def webhook():
-    # This endpoint will be called by Telegram when a new message is received
-    update = request.get_json()
-    if "message" in update and "text" in update["message"]:
-        # Extract the chat ID and message text from the update
-        chat_id = update["message"]["chat"]["id"]
-        query = update["message"]["text"]
-
-        # Pass the query to the Groq model
-        client = Groq()
-        completion_ds = client.chat.completions.create(
-            model="deepseek-r1-distill-llama-70b",
-            messages=[
-                {
-                    "role": "user",
-                    "content": query
-                }
-            ]
-        )
-        response_message = completion_ds.choices[0].message.content
-
-        # Send the response back to the Telegram chat
-        send_message_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        requests.post(send_message_url, json={
-            "chat_id": chat_id,
-            "text": response_message
-        })
-    return('ok', 200)
+        status = "Polling was not running."
+    return render_template("telegram_polling.html", r=status)
+###############################################################
 
 if __name__ == "__main__":
     app.run()
