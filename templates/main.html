@@ -1,0 +1,27 @@
+<head>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static',
+        filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+    <h2>Main</h2>
+        <form action="/llama" method="post">
+            <input type="submit" value="LLAMA chatbot via groq">
+        </form>
+        <form action="/deepseek" method="post">
+            <input type="submit" value="DEEPSEEK chatbot via groq">
+        </form>
+        <form action="/dbs" method="post">
+            <input type="submit" value="Predict DBS price">
+        </form>
+        <form action="/telegram" method="post">
+            <input type="submit" value="START TELEGRAM">
+        </form>
+        <form action="/stop_telegram" method="post">
+            <input type="submit" value="STOP TELEGRAM">
+        </form>
+    </div>
+</body>
+
