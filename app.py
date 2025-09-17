@@ -8,12 +8,15 @@ from telegram.ext import Updater, MessageHandler, Filters
 # from dotenv import load_dotenv
 # load_dotenv()
 
+# Load Telegram bot token from environment variable
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-telegram_app = None
-polling_thread = None
 # Initialize Groq client once
 groq_client = Groq()
+
+# Global variables for Telegram bot
+telegram_app = None
+polling_thread = None
 updater = None  # Global updater variable
 
 ###############################################################
